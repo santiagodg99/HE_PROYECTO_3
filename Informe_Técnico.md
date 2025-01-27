@@ -52,8 +52,8 @@
 
 | Dato a introducir | Respuesta |
 |---------|---------|
-| Introduzco el mensaje ... | `<script>alert(“Hacked”);</script>` |
-| En el formulario de la página … | show_comments.php|
+| Introduzco el mensaje ... | `<script>alert(“Hacked!”);</script>` |
+| En el formulario de la página … | add_comment.php|
 
 ### b) ¿ Por qué dice &amp ; cuando miráis un link (como el que aparece a la portada de esta aplicación pidiendo que realices un donativo) con parámetros GETdentro de código html si en realidad el link es sólo con "&" ?
 
@@ -70,11 +70,28 @@
 | … por el siguiente código … | `echo "<div>`<br>`    <h4>" . htmlspecialchars($row['username'], ENT_QUOTES, 'UTF-8') . "</h4> `<br>`    <p>commented: " . htmlspecialchars($row['body'], ENT_QUOTES, 'UTF-8') . "</p>`<br>`</div>";`<br><br>(la función htmlspecialchars() permite convertir caracteres especiales en entidades HTML, lo que evitará que se interpreten como código.) |
 
 ### d) Descubrid si hay alguna otra página que esté afectada por esta misma vulnerabilidad. En caso positivo, explicad cómo lo habéis descubierto.
+Hay dos páginas más que también están afectadas por esta misma vulnerabilidad, y son **buscador.php** y **list_player.php**. Si analizamos el siguiente trozo de código:
+```bash
+$result = $db->query($query) or die("Invalid query");
 
-| Dato a introducir | Respuesta |
-|---------|---------|
-|Otras páginas afectadas …||
-|¿Cómo lo he descubierto? …||
+            while ($row = $result->fetchArray()) {
+                echo "
+                    <li>
+                    <div>
+                    <span>Name: " . $row['name']
+                 . "</span><span>Team: " . $row['team']
+                 . "</span></div>
+                    <div>
+                    <a href=\"show_comments.php?id=".$row['playerid']."\">(show/add comments)</a> 
+                    <a href=\"insert_player.php?id=".$row['playerid']."\">(edit player)</a>
+                    </div>
+                    </li>\n";
+            }
+            ?>
+```
+podemos ver que los datos $row['name'], $row['team'] y $row['playerid'] sufren la vulnerabilidad explicada en el apartado anterior. 
+
+Debemos sanitizar la salida con `htmlspecialchars()`, validar las entradas y usar *prepared statements* para evitar problemas de XSS e inyecciones SQL que puedan surgir.
 
 ## Parte 3 - Control de acceso, autenticación y sesiones de usuarios
 
@@ -250,6 +267,8 @@ Este código asegura que las sesiones inactivas se cierren automáticamente desp
 
 No. Para evitar el acceso no autorizado a la carpeta `private` podemos tomar las siguientes medidas:
 
++ Colocar la carpeta `private` fuera de la raíz del servidor web. Esto se puede hacer con la línea de código
+ 
 + Establecer permisos restrictivos en la carpeta para que solo el servidor web pueda acceder a ella.
 
 + Cifrar los archivos sensibles dentro de la carpeta.
@@ -262,7 +281,7 @@ Para asegurar la sesión del usuario e impedir la suplantación de este basta co
 
 ## Parte 4 - Servidores web
 
-### ¿Qué medidas de seguridad se implementariaís en el servidor web para reducir el riesgo a ataques?
+### ¿Qué medidas de seguridad implementariaís en el servidor web para reducir el riesgo a ataques?
 
 + Implementar un firewall de aplicaciones web (WAF) para protegernos de ataques comunes como inyección SQL o XSS.
 
@@ -301,7 +320,7 @@ Para asegurar la sesión del usuario e impedir la suplantación de este basta co
 }
 ``` 
 
-### b) Una vez lo tenéis terminado, pensáis que la eficacia de este ataque aumentaría si no necesitara que elusuario pulse un botón. Con este objetivo, cread un comentario que sirva vuestros propósitos sin levantar ninguna sospecha entre los usuarios que consulten los comentarios sobre un jugador (`show\_comments.php`).
+### b) Una vez lo tenéis terminado, pensáis que la eficacia de este ataque aumentaría si no necesitara que el usuario pulse un botón. Con este objetivo, cread un comentario que sirva vuestros propósitos sin levantar ninguna sospecha entre los usuarios que consulten los comentarios sobre un jugador (`show\_comments.php`).
 
  Para realizar este apartado hemos aprovechado la vulnerabilidad de XSS y hemos insertado el siguiente código JavaScript en el campo “body” del formulario de `show_comments.php`:
 
@@ -312,10 +331,8 @@ Para asegurar la sesión del usuario e impedir la suplantación de este basta co
 Este comentario parece inofensivo, pero en realidad oculta un script dentro de él que redirige al usuario a la URL maliciosa una vez que consulta los comentarios de un jugador.
 
 ### c) Pero web.pagos sólo gestiona pagos y donaciones entre usuarios registrados, puesto que, evidentemente, le tiene que restar los 100€ a la cuenta de algún usuario para poder añadirlos a nuestra cuenta.
-### Explicad qué condición se tendrá que cumplir por que se efectúen las donaciones de los usuarios que visualicen el mensaje del apartado anterior o hagan click en el botón del apartado a).
-
-(HACER)
-
+### Explicad qué condición se tendrá que cumplir para que se efectúen las donaciones de los usuarios que visualicen el mensaje del apartado anterior o hagan click en el botón del apartado a).
+Los usuarios que visualicen el mensaje *¡Gran jugador!* o pinchen en el botón *Profile* deben estar registrados y autenticados en **web.pagos** y tener suficiente saldo en su cuenta para cubrir los 100€.
 
 ### d) Si web.pagos modifica la página `donate.php` para que reciba los parámetros a través de POST, quedaría blindada contra este tipo de ataques? En caso negativo, preparad un mensaje que realice un ataque equivalente al de la apartado b) enviando los parámetros “amount” y “receiver” por POST.
 
@@ -354,13 +371,13 @@ De hecho, un atacante podría inyectar este código XSS en el campo “body” d
 </p>
 ```
 
-Este trozo de código realizará las siguientes acciones:
+Este trozo de código realizaría las siguientes acciones:
 
 + Crear un formulario oculto con método POST que redireccionará al usuario a `http://web.pagos/donate.php`.
 
-+ Añade los campos ocultos amount y receiver.
++ Añadir los campos ocultos amount y receiver.
 
-+ Envía el formulario automáticamente al consultar los comentarios de un jugador.
++ Enviar el formulario automáticamente al consultar los comentarios de un jugador.
 
 Si el usuario está autenticado en `web.pagos`, se realizará la donación.
 
